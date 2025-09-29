@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import socketService from '../services/socket';
 import './Message.css';
 
-const Message = ({ message, currentUserId, onReply, onForward, onCopy }) => {
+const Message = ({ message, currentUser, conversation, onReply, onForward, onCopy }) => {
   const [showActions, setShowActions] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const [timeLeft, setTimeLeft] = useState(30);
   const [showBreadcrumbMenu, setShowBreadcrumbMenu] = useState(false);
 
-  const isOwnMessage = message.senderId._id === currentUserId;
+  const isOwnMessage = message.senderId._id === currentUser.id;
   const messageTime = new Date(message.timestamp);
 
   // Update local state when message prop changes
@@ -118,6 +118,133 @@ const Message = ({ message, currentUserId, onReply, onForward, onCopy }) => {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Determine read status for tick icon
+  const getReadStatus = () => {
+    if (!isOwnMessage || !conversation) return null;
+    
+    // For one-on-one chats, find the other participant
+    if (!conversation.isGroupChat) {
+      const otherParticipant = conversation.participants.find(
+        participant => participant._id.toString() !== currentUser.id.toString()
+      );
+      
+      if (otherParticipant) {
+        const isRead = message.readBy && message.readBy.some(
+          reader => reader._id.toString() === otherParticipant._id.toString()
+        );
+        
+        return isRead ? 'read' : 'sent';
+      }
+    }
+    
+    // For group chats, we could implement more complex logic later
+    // For now, just show as sent
+    return 'sent';
+  };
+
+  const renderTickIcon = () => {
+    const readStatus = getReadStatus();
+    
+    if (!readStatus) return null;
+    
+    if (readStatus === 'read') {
+      return (
+        <span className="tick-icon read" title="Read">
+          ✓✓
+        </span>
+      );
+    } else {
+      return (
+        <span className="tick-icon sent" title="Sent">
+          ✓
+        </span>
+      );
+    }
+  };
+
+  const parseMessageContent = (content) => {
+    const fileRegex = /\[FILE:(.*?)\]/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = fileRegex.exec(content)) !== null) {
+      // Add text before the file
+      if (match.index > lastIndex) {
+        const textContent = content.slice(lastIndex, match.index).trim();
+        if (textContent) {
+          parts.push({ type: 'text', content: textContent });
+        }
+      }
+
+      // Parse and add the file
+      try {
+        const fileInfo = JSON.parse(match[1]);
+        parts.push({ type: 'file', content: fileInfo });
+      } catch (error) {
+        console.error('Error parsing file info:', error);
+        parts.push({ type: 'text', content: match[0] });
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text
+    if (lastIndex < content.length) {
+      const textContent = content.slice(lastIndex).trim();
+      if (textContent) {
+        parts.push({ type: 'text', content: textContent });
+      }
+    }
+
+    return parts.length > 0 ? parts : [{ type: 'text', content }];
+  };
+
+  const renderFile = (fileInfo) => {
+    const { name, type, size, data } = fileInfo;
+    
+    if (type.startsWith('image/')) {
+      return (
+        <div className="file-attachment image-attachment">
+          <img 
+            src={data} 
+            alt={name}
+            className="attachment-image"
+            onClick={() => window.open(data, '_blank')}
+          />
+          <div className="file-info">
+            <div className="file-name">{name}</div>
+            <div className="file-size">{(size / 1024).toFixed(1)} KB</div>
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <div className="file-attachment document-attachment">
+          <div className="file-icon">
+            {type === 'application/pdf' ? '📄' : '📝'}
+          </div>
+          <div className="file-info">
+            <div className="file-name">{name}</div>
+            <div className="file-size">{(size / 1024).toFixed(1)} KB</div>
+          </div>
+          <button 
+            className="download-btn"
+            onClick={() => {
+              const link = document.createElement('a');
+              link.href = data;
+              link.download = name;
+              link.click();
+            }}
+            title="Download file"
+          >
+            ⬇️
+          </button>
+        </div>
+      );
+    }
+  };
+
   return (
     <div className={`message ${isOwnMessage ? 'own' : 'other'}`}>
       <div className="message-content">
@@ -146,13 +273,24 @@ const Message = ({ message, currentUserId, onReply, onForward, onCopy }) => {
                 <em>This message was deleted by the user</em>
               </div>
             ) : (
-              <div className="message-text">{message.content}</div>
+              <div className="message-content-parts">
+                {parseMessageContent(message.content).map((part, index) => (
+                  <div key={index}>
+                    {part.type === 'text' ? (
+                      <div className="message-text">{part.content}</div>
+                    ) : (
+                      renderFile(part.content)
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
             <div className="message-meta">
               <span className="message-time">
                 {formatTime(messageTime)}
                 {message.isEdited && <span className="edited-indicator"> (edited)</span>}
               </span>
+              {renderTickIcon()}
               <div className="message-actions">
                 {!message.isDeleted && (
                   <div className="breadcrumb-container">

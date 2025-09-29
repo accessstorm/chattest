@@ -79,6 +79,7 @@
   border-radius: 25px;
   padding: 8px 12px;
   transition: border-color 0.3s ease;
+  gap: 8px;
 }
 
 .input-wrapper:focus-within {
@@ -99,6 +100,33 @@
 
 .message-input::placeholder {
   color: #8696a0;
+}
+
+.attach-button {
+  background: none;
+  border: none;
+  color: #8696a0;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.attach-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e9edef;
+}
+
+.attach-button svg {
+  transition: transform 0.2s ease;
+}
+
+.attach-button:hover svg {
+  transform: rotate(45deg);
 }
 
 .send-button {
@@ -134,6 +162,67 @@
   transform: translateX(2px);
 }
 
+/* File Preview Styles */
+.file-preview {
+  margin-bottom: 10px;
+  background: #2a3942;
+  border-radius: 8px;
+  border: 1px solid #2a3942;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  position: relative;
+}
+
+.file-icon {
+  font-size: 1.2rem;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.file-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.file-name {
+  font-weight: 600;
+  color: #e9edef;
+  font-size: 0.9rem;
+  line-height: 1.3;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  color: #8696a0;
+  font-size: 0.8rem;
+}
+
+.file-remove {
+  background: none;
+  border: none;
+  color: #8696a0;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.file-remove:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e9edef;
+}
+
 @media (max-width: 768px) {
   .message-input-container {
     padding: 15px;
@@ -156,5 +245,18 @@
   .send-button svg {
     width: 18px;
     height: 18px;
+  }
+  
+  .attach-button {
+    padding: 6px;
+  }
+  
+  .attach-button svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .file-name {
+    max-width: 150px;
   }
 }

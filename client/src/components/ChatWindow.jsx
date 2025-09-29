@@ -53,20 +53,51 @@ const ChatWindow = ({ selectedConversation, currentUser, onlineUsers }) => {
     console.error('Socket error:', error);
   }, []);
 
+  const handleMessagesRead = useCallback((data) => {
+    console.log('Messages read event received:', data);
+    const { readerId, conversationId } = data;
+    
+    // Only update if this is for the current conversation
+    if (selectedConversation && conversationId === selectedConversation._id) {
+      setMessages(prev => 
+        prev.map(msg => {
+          // For messages sent by the current user, add the reader to readBy array
+          if (msg.senderId._id.toString() === currentUser.id.toString()) {
+            // Check if reader is not already in readBy array
+            const isAlreadyRead = msg.readBy && msg.readBy.some(
+              reader => reader._id.toString() === readerId.toString()
+            );
+            
+            if (!isAlreadyRead) {
+              console.log('Adding reader to message readBy:', readerId);
+              return {
+                ...msg,
+                readBy: [...(msg.readBy || []), { _id: readerId }]
+              };
+            }
+          }
+          return msg;
+        })
+      );
+    }
+  }, [selectedConversation, currentUser.id]);
+
   // Set up socket event listeners once when component mounts
   useEffect(() => {
     socketService.onNewMessage(handleNewMessage);
     socketService.onMessageUpdated(handleMessageUpdated);
     socketService.onMessageDeleted(handleMessageDeleted);
     socketService.onError(handleError);
+    socketService.onMessagesRead(handleMessagesRead);
 
     return () => {
       socketService.offNewMessage(handleNewMessage);
       socketService.offMessageUpdated(handleMessageUpdated);
       socketService.offMessageDeleted(handleMessageDeleted);
       socketService.offError(handleError);
+      socketService.offMessagesRead(handleMessagesRead);
     };
-  }, [handleNewMessage, handleMessageUpdated, handleMessageDeleted, handleError]);
+  }, [handleNewMessage, handleMessageUpdated, handleMessageDeleted, handleError, handleMessagesRead]);
 
   // Load messages when selectedConversation changes
   useEffect(() => {
@@ -93,18 +124,52 @@ const ChatWindow = ({ selectedConversation, currentUser, onlineUsers }) => {
       
       loadMessages();
       socketService.markAsRead(selectedConversation._id);
+      // Emit markMessagesAsRead to track read status with readBy field
+      socketService.markMessagesAsRead(selectedConversation._id);
     } else {
       setMessages([]);
     }
   }, [selectedConversation]);
 
 
-  const handleSendMessage = (content, replyToMessage) => {
-    if (selectedConversation && content.trim()) {
-      // For now, we'll just send the message normally
-      // In a full implementation, you'd include reply information
-      socketService.sendMessage(selectedConversation._id, content.trim());
+  const handleSendMessage = async (content, replyToMessage, file) => {
+    if (selectedConversation && (content.trim() || file)) {
+      let messageContent = content.trim();
+      
+      // If there's a file, convert it to base64 and include it in the message
+      if (file) {
+        try {
+          const base64 = await convertFileToBase64(file);
+          const fileInfo = {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            data: base64
+          };
+          
+          if (messageContent) {
+            messageContent += `\n[FILE:${JSON.stringify(fileInfo)}]`;
+          } else {
+            messageContent = `[FILE:${JSON.stringify(fileInfo)}]`;
+          }
+        } catch (error) {
+          console.error('Error converting file to base64:', error);
+          alert('Error processing file. Please try again.');
+          return;
+        }
+      }
+      
+      socketService.sendMessage(selectedConversation._id, messageContent);
     }
+  };
+
+  const convertFileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+    });
   };
 
   const handleReply = (message) => {
@@ -218,7 +283,8 @@ const ChatWindow = ({ selectedConversation, currentUser, onlineUsers }) => {
                 <Message
                   key={message._id}
                   message={message}
-                  currentUserId={currentUser.id}
+                  currentUser={currentUser}
+                  conversation={selectedConversation}
                   onReply={handleReply}
                   onForward={handleForward}
                   onCopy={handleCopy}

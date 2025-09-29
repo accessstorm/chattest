@@ -86,7 +86,8 @@ const handleSocketEvents = (socket, io) => {
 
       // Populate the message with user data
       await message.populate([
-        { path: 'senderId', select: 'username' }
+        { path: 'senderId', select: 'username' },
+        { path: 'readBy', select: 'username' }
       ]);
 
       // Broadcast to all participants in the conversation room
@@ -142,7 +143,8 @@ const handleSocketEvents = (socket, io) => {
 
       // Populate the message with user data
       await message.populate([
-        { path: 'senderId', select: 'username' }
+        { path: 'senderId', select: 'username' },
+        { path: 'readBy', select: 'username' }
       ]);
 
       // Broadcast to all participants in the conversation room
@@ -192,7 +194,8 @@ const handleSocketEvents = (socket, io) => {
 
       // Populate the message with user data
       await message.populate([
-        { path: 'senderId', select: 'username' }
+        { path: 'senderId', select: 'username' },
+        { path: 'readBy', select: 'username' }
       ]);
 
       // Broadcast to all participants in the conversation room
@@ -241,6 +244,58 @@ const handleSocketEvents = (socket, io) => {
       });
     } catch (error) {
       console.error('Mark as read error:', error);
+      socket.emit('error', { message: 'Failed to mark messages as read' });
+    }
+  });
+
+  // Mark messages as read (new implementation with readBy tracking)
+  socket.on('markMessagesAsRead', async (data) => {
+    try {
+      const { conversationId } = data;
+      const readerId = socket.userId;
+
+      // Verify user is participant in conversation
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+        participants: readerId
+      });
+
+      if (!conversation) {
+        socket.emit('error', { message: 'Conversation not found or access denied' });
+        return;
+      }
+
+      // Find all messages in the conversation that:
+      // 1. Were NOT sent by the reader (messages from other participants)
+      // 2. Have not been read by the reader yet
+      const messagesToUpdate = await Message.find({
+        conversationId: conversationId,
+        senderId: { $ne: readerId },
+        readBy: { $ne: readerId }
+      });
+
+      if (messagesToUpdate.length > 0) {
+        // Update all matching messages to include the reader in readBy array
+        await Message.updateMany(
+          {
+            conversationId: conversationId,
+            senderId: { $ne: readerId },
+            readBy: { $ne: readerId }
+          },
+          {
+            $addToSet: { readBy: readerId }
+          }
+        );
+
+        // Notify all participants that messages were read
+        io.to(conversationId).emit('messagesRead', { 
+          readerId: readerId,
+          conversationId: conversationId,
+          readAt: new Date()
+        });
+      }
+    } catch (error) {
+      console.error('Mark messages as read error:', error);
       socket.emit('error', { message: 'Failed to mark messages as read' });
     }
   });

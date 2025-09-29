@@ -209,6 +209,7 @@ router.get('/:conversationId/messages', auth, async (req, res) => {
       conversationId: conversationId
     })
     .populate('senderId', 'username')
+    .populate('readBy', 'username')
     .sort({ timestamp: 1 });
 
     res.json(messages);

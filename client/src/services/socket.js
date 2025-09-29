@@ -69,6 +69,12 @@ class SocketService {
     }
   }
 
+  markMessagesAsRead(conversationId) {
+    if (this.socket) {
+      this.socket.emit('markMessagesAsRead', { conversationId });
+    }
+  }
+
   joinRooms(conversationIds) {
     if (this.socket) {
       this.socket.emit('joinRooms', conversationIds);
