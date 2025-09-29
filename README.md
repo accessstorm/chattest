@@ -8,16 +8,18 @@ A comprehensive full-stack real-time chat application built with the MERN stack 
 - **Real-time messaging** with Socket.IO for instant communication
 - **Message editing and deletion** within 30 seconds of sending
 - **Reply functionality** with quoted message display
-- **Message forwarding** to multiple users simultaneously
+- **Message forwarding** to multiple conversations simultaneously
 - **Copy message** to clipboard functionality
+- **File sharing** with support for images, PDFs, and text files (up to 500KB)
 - **Persistent chat history** stored in MongoDB
-- **Message status indicators** (sent/delivered)
+- **Message read status indicators** with visual tick icons (grey/blue)
 
 ### User Interface Features
 - **Modern WhatsApp-inspired design** with yellow accent colors (#ffda03)
 - **Breadcrumb menu system** for message actions (Reply, Forward, Copy)
-- **Forward message popup** with user selection and search
+- **Forward message popup** with conversation selection and search
 - **Reply preview** in message input with quoted content
+- **File attachment interface** with + icon and file preview
 - **Responsive design** optimized for mobile and desktop
 - **User avatars** with first letter display
 - **Online/offline status** indicators
@@ -31,11 +33,14 @@ A comprehensive full-stack real-time chat application built with the MERN stack 
 
 ### Advanced Functionality
 - **Unread message counts** per conversation
-- **Message read status** tracking
+- **Message read status** tracking with real-time tick icon updates
 - **User presence** (online/offline) detection
 - **Conversation management** with user selection
 - **Search functionality** in forward modal
-- **Bulk user selection** for forwarding
+- **Bulk conversation selection** for forwarding
+- **File validation** with type and size restrictions
+- **Image preview** with click-to-expand functionality
+- **Document download** for PDF and text files
 
 ## 🛠 Technology Stack
 
@@ -252,18 +257,19 @@ The reply system allows users to respond to specific messages with context:
 - Quoted messages show original sender and content
 
 ### Forward System
-The forward system enables sending messages to multiple users:
+The forward system enables sending messages to multiple conversations:
 
 1. **Forward Trigger:** Click "⋯" → "Forward" on any message
-2. **User Selection:** Modal opens with all available users and checkboxes
-3. **Multi-Selection:** Select multiple recipients with search functionality
-4. **Bulk Send:** Message is sent to all selected users simultaneously
+2. **Conversation Selection:** Modal opens with all available conversations and checkboxes
+3. **Multi-Selection:** Select multiple conversations with search functionality
+4. **Bulk Send:** Message is sent to all selected conversations simultaneously
 
 **Technical Implementation:**
-- ForwardModal component handles user selection
-- Socket service sends message to multiple recipients
-- Search functionality filters users in real-time
-- Selection counter shows number of selected users
+- ForwardModal component handles conversation selection
+- Socket service sends message to multiple conversation rooms
+- Search functionality filters conversations in real-time
+- Selection counter shows number of selected conversations
+- Current conversation is filtered out to prevent self-forwarding
 
 ### Breadcrumb Menu System
 The breadcrumb menu provides a clean interface for message actions:
@@ -292,6 +298,37 @@ Time-limited message editing and deletion:
 - Socket events handle edit/delete operations
 - Database updates reflect changes in real-time
 - Visual feedback for user actions
+
+### File Sharing System
+The file sharing system allows users to attach and share files with restrictions:
+
+1. **File Selection:** Click "+" icon to open file picker
+2. **File Validation:** Only images (JPEG, PNG, GIF), PDFs, and text files up to 500KB
+3. **File Preview:** Selected files show with name, size, and remove option
+4. **File Display:** Images show as thumbnails, documents show with download button
+
+**Technical Implementation:**
+- File validation with MIME type and size checking
+- Base64 encoding for file transmission
+- File metadata preservation (name, type, size)
+- Image preview with click-to-expand functionality
+- Document download with one-click functionality
+- Mixed content support (text + files in same message)
+
+### Message Read Status System
+The read status system provides visual indicators for message delivery:
+
+1. **Visual Indicators:** Grey tick (✓) for sent, blue tick (✓✓) for read
+2. **Real-time Updates:** Tick icons change color instantly when messages are read
+3. **Read Tracking:** Backend tracks which users have read each message
+4. **One-on-One Support:** Works perfectly for direct conversations
+
+**Technical Implementation:**
+- `readBy` array in Message model stores user IDs who have read the message
+- `markMessagesAsRead` socket event updates read status
+- `messagesRead` event notifies all participants of read status changes
+- Real-time UI updates when other users read messages
+- Efficient database queries with `$addToSet` for read tracking
 
 ### Real-time Messaging
 - Messages are sent instantly using Socket.IO
@@ -322,14 +359,20 @@ Time-limited message editing and deletion:
 ## Socket.IO Events
 
 ### Client to Server
-- `sendMessage` - Send a new message
+- `sendMessage` - Send a new message (supports text and file attachments)
 - `editMessage` - Edit an existing message
 - `deleteMessage` - Delete a message
+- `markMessagesAsRead` - Mark messages as read in a conversation
+- `joinRooms` - Join conversation rooms for real-time updates
 
 ### Server to Client
 - `newMessage` - Receive a new message
 - `messageUpdated` - Receive message update
 - `messageDeleted` - Receive message deletion notification
+- `messagesRead` - Receive notification when messages are read by other users
+- `userOnline` - User comes online
+- `userOffline` - User goes offline
+- `onlineUsers` - List of currently online users
 - `error` - Receive error messages
 
 ## 📁 Detailed Project Structure
@@ -339,11 +382,13 @@ chattest-master/
 ├── server/                          # Backend Application
 │   ├── models/                      # Database Models
 │   │   ├── User.js                  # User schema with authentication
-│   │   └── Message.js               # Message schema with relationships
+│   │   ├── Message.js               # Message schema with read tracking
+│   │   └── Conversation.js          # Conversation schema for groups and direct chats
 │   ├── routes/                      # API Routes
 │   │   ├── auth.js                  # Authentication endpoints
 │   │   ├── users.js                 # User management endpoints
-│   │   └── messages.js              # Message CRUD endpoints
+│   │   ├── messages.js              # Message CRUD endpoints
+│   │   └── conversations.js         # Conversation management endpoints
 │   ├── socket/                      # Socket.IO Handlers
 │   │   └── socketHandler.js         # Real-time event handling
 │   ├── middleware/                  # Custom Middleware
@@ -353,16 +398,17 @@ chattest-master/
 ├── client/                          # Frontend Application
 │   ├── src/
 │   │   ├── components/              # Reusable UI Components
-│   │   │   ├── Message.jsx          # Individual message component
-│   │   │   ├── Message.css          # Message styling
-│   │   │   ├── MessageInput.jsx     # Message input with reply preview
-│   │   │   ├── MessageInput.css     # Input styling
-│   │   │   ├── ChatWindow.jsx       # Main chat interface
+│   │   │   ├── Message.jsx          # Individual message component with file support
+│   │   │   ├── Message.css          # Message styling with file attachment styles
+│   │   │   ├── MessageInput.jsx     # Message input with file upload and reply preview
+│   │   │   ├── MessageInput.css     # Input styling with attach button
+│   │   │   ├── ChatWindow.jsx       # Main chat interface with file handling
 │   │   │   ├── ChatWindow.css       # Chat window styling
-│   │   │   ├── UserList.jsx         # User selection sidebar
-│   │   │   ├── UserList.css         # User list styling
-│   │   │   ├── ForwardModal.jsx     # Forward message modal
-│   │   │   └── ForwardModal.css     # Modal styling
+│   │   │   ├── ConversationList.jsx # Conversation selection sidebar
+│   │   │   ├── ForwardModal.jsx     # Forward message modal with conversation selection
+│   │   │   ├── ForwardModal.css     # Modal styling
+│   │   │   ├── CreateGroupModal.jsx # Group creation modal
+│   │   │   └── CreateGroupModal.css # Group modal styling
 │   │   ├── pages/                   # Page Components
 │   │   │   ├── LoginPage.jsx        # User authentication page
 │   │   │   ├── LoginPage.css        # Login page styling
@@ -590,6 +636,27 @@ npm run dev  # Uses Vite for hot reload
 3. Use a production MongoDB instance
 4. Build the frontend: `npm run build`
 5. Serve the built files with a web server
+
+## 🆕 Recent Updates
+
+### Version 2.0 Features
+- **✅ File Sharing System:** Added + icon for sharing images, PDFs, and text files (up to 500KB)
+- **✅ Message Read Status:** Implemented visual tick icons (grey/blue) with real-time updates
+- **✅ Enhanced Forward System:** Updated to forward to conversations instead of individual users
+- **✅ Improved UI/UX:** Better file preview, download functionality, and responsive design
+
+### Technical Improvements
+- **Database Schema:** Added `readBy` field to Message model for read tracking
+- **Socket Events:** New `markMessagesAsRead` and `messagesRead` events
+- **File Handling:** Base64 encoding for file transmission with metadata preservation
+- **Real-time Updates:** Instant tick icon color changes when messages are read
+- **Validation:** Client-side file type and size validation with user feedback
+
+### New Components
+- **File Attachment Interface:** + icon with file preview and validation
+- **Read Status Indicators:** Visual tick icons with real-time updates
+- **Enhanced Message Display:** Support for mixed content (text + files)
+- **Improved Forward Modal:** Conversation-based forwarding with search
 
 ## License
 
