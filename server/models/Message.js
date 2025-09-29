@@ -6,9 +6,9 @@ const messageSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  receiverId: {
+  conversationId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'Conversation',
     required: true
   },
   content: {
@@ -42,6 +42,6 @@ const messageSchema = new mongoose.Schema({
 });
 
 // Index for efficient querying of conversations
-messageSchema.index({ senderId: 1, receiverId: 1, timestamp: -1 });
+messageSchema.index({ conversationId: 1, timestamp: -1 });
 
 module.exports = mongoose.model('Message', messageSchema);

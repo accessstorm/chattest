@@ -11,6 +11,7 @@ const jwt = require('jsonwebtoken');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const messageRoutes = require('./routes/messages');
+const conversationRoutes = require('./routes/conversations');
 const socketHandler = require('./socket/socketHandler');
 
 const app = express();
@@ -33,6 +34,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/conversations', conversationRoutes);
 
 // Socket.IO authentication middleware
 io.use((socket, next) => {

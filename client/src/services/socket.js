@@ -43,9 +43,9 @@ class SocketService {
   }
 
   // Message events
-  sendMessage(receiverId, content) {
+  sendMessage(conversationId, content) {
     if (this.socket) {
-      this.socket.emit('sendMessage', { receiverId, content });
+      this.socket.emit('sendMessage', { conversationId, content });
     }
   }
 
@@ -63,9 +63,15 @@ class SocketService {
     }
   }
 
-  markAsRead(otherUserId) {
+  markAsRead(conversationId) {
     if (this.socket) {
-      this.socket.emit('markAsRead', { otherUserId });
+      this.socket.emit('markAsRead', { conversationId });
+    }
+  }
+
+  joinRooms(conversationIds) {
+    if (this.socket) {
+      this.socket.emit('joinRooms', conversationIds);
     }
   }
 

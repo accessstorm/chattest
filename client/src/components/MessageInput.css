@@ -1,14 +1,14 @@
 .message-input-container {
   padding: 20px;
-  background: white;
-  border-top: 1px solid #e1e5e9;
+  background: #202c33;
+  border-top: 1px solid #2a3942;
 }
 
 .reply-preview {
   margin-bottom: 10px;
-  background: #f8f9fa;
+  background: #2a3942;
   border-radius: 8px;
-  border: 1px solid #e1e5e9;
+  border: 1px solid #2a3942;
 }
 
 .reply-content {
@@ -21,7 +21,7 @@
 .reply-line {
   width: 3px;
   height: 40px;
-  background: #ffda03;
+  background: #ffd700;
   border-radius: 2px;
   margin-right: 10px;
   flex-shrink: 0;
@@ -36,12 +36,12 @@
 
 .reply-sender {
   font-weight: 600;
-  color: #ffda03;
+  color: #ffd700;
   font-size: 0.85rem;
 }
 
 .reply-message {
-  color: #666;
+  color: #8696a0;
   font-size: 0.9rem;
   line-height: 1.3;
   max-width: 300px;
@@ -53,7 +53,7 @@
 .reply-cancel {
   background: none;
   border: none;
-  color: #999;
+  color: #8696a0;
   font-size: 18px;
   cursor: pointer;
   padding: 4px;
@@ -63,8 +63,8 @@
 }
 
 .reply-cancel:hover {
-  background: rgba(0, 0, 0, 0.1);
-  color: #666;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e9edef;
 }
 
 .message-input-form {
@@ -74,16 +74,16 @@
 .input-wrapper {
   display: flex;
   align-items: center;
-  background: #f8f9fa;
-  border: 2px solid #e1e5e9;
+  background: #2a3942;
+  border: 2px solid #2a3942;
   border-radius: 25px;
   padding: 8px 12px;
   transition: border-color 0.3s ease;
 }
 
 .input-wrapper:focus-within {
-  border-color: #ffda03;
-  box-shadow: 0 0 0 3px rgba(255, 218, 3, 0.1);
+  border-color: #ffd700;
+  box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.1);
 }
 
 .message-input {
@@ -92,17 +92,17 @@
   background: transparent;
   padding: 8px 12px;
   font-size: 1rem;
-  color: #333;
+  color: #e9edef;
   outline: none;
   resize: none;
 }
 
 .message-input::placeholder {
-  color: #999;
+  color: #8696a0;
 }
 
 .send-button {
-  background: #ffda03;
+  background: #ffd700;
   border: none;
   border-radius: 50%;
   width: 40px;
@@ -112,16 +112,16 @@
   justify-content: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  color: #333;
+  color: #0b141a;
 }
 
 .send-button:hover:not(:disabled) {
-  background: #e6c400;
+  background: #ffed4e;
   transform: scale(1.05);
 }
 
 .send-button:disabled {
-  background: #ccc;
+  background: #8696a0;
   cursor: not-allowed;
   transform: none;
 }

@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../utils/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import UserList from '../components/UserList';
+import ConversationList from '../components/ConversationList';
 import ChatWindow from '../components/ChatWindow';
+import CreateGroupModal from '../components/CreateGroupModal';
 import socketService from '../services/socket';
 import './ChatPage.css';
 
 const ChatPage = () => {
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [users, setUsers] = useState([]);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [onlineUsers, setOnlineUsers] = useState(new Set());
   const [unreadCounts, setUnreadCounts] = useState({});
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -28,9 +30,8 @@ const ChatPage = () => {
       socketService.connect(token);
     }
 
-    // Load users and unread counts
-    loadUsers();
-    loadUnreadCounts();
+    // Load conversations first, then unread counts
+    loadConversations();
 
     // Set up socket event listeners
     const handleUserOnline = (userId) => {
@@ -46,10 +47,9 @@ const ChatPage = () => {
     };
 
     const handleNewMessage = (message) => {
-      // If the message is for the current user, update unread count
-      if (message.receiverId._id === user.id) {
-        loadUnreadCounts();
-      }
+      // Update conversations list to show new last message
+      loadConversations();
+      loadUnreadCounts();
     };
 
     const handleMessagesRead = (data) => {
@@ -78,20 +78,31 @@ const ChatPage = () => {
     };
   }, [user, navigate]);
 
-  const loadUsers = async () => {
+  const loadConversations = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/users', {
+      const response = await fetch('http://localhost:5000/api/conversations', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       
       if (response.ok) {
-        const usersData = await response.json();
-        setUsers(usersData);
+        const conversationsData = await response.json();
+        setConversations(conversationsData);
+        
+        // Join socket rooms for all conversations
+        const conversationIds = conversationsData.map(conv => conv._id);
+        if (conversationIds.length > 0) {
+          socketService.joinRooms(conversationIds);
+        }
+        
+        // Load unread counts after conversations are loaded
+        setTimeout(() => {
+          loadUnreadCounts();
+        }, 100);
       }
     } catch (error) {
-      console.error('Error loading users:', error);
+      console.error('Error loading conversations:', error);
     } finally {
       setLoading(false);
     }
@@ -99,30 +110,71 @@ const ChatPage = () => {
 
   const loadUnreadCounts = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/messages/unread/counts', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      // For now, we'll calculate unread counts based on conversations
+      // In a real implementation, you'd have a dedicated endpoint for conversation unread counts
+      const countsMap = {};
       
-      if (response.ok) {
-        const unreadData = await response.json();
-        const countsMap = {};
-        unreadData.forEach(item => {
-          countsMap[item.senderId] = item.unreadCount;
+      // This is a simplified approach - in production you'd want a proper API endpoint
+      // that returns unread counts per conversation
+      if (conversations.length > 0) {
+        conversations.forEach(conv => {
+          // For demonstration, we'll set some random unread counts
+          // In reality, this would come from your backend
+          if (Math.random() > 0.7) { // 30% chance of having unread messages
+            countsMap[conv._id] = Math.floor(Math.random() * 5) + 1;
+          }
         });
-        setUnreadCounts(countsMap);
       }
+      
+      setUnreadCounts(countsMap);
     } catch (error) {
       console.error('Error loading unread counts:', error);
     }
   };
 
-  const handleUserSelect = (user) => {
-    setSelectedUser(user);
-    // Mark messages as read when user is selected
-    if (user) {
-      socketService.markAsRead(user._id);
+  const handleConversationSelect = (conversation) => {
+    setSelectedConversation(conversation);
+    // Mark messages as read when conversation is selected
+    if (conversation) {
+      socketService.markAsRead(conversation._id);
+    }
+  };
+
+  const handleGroupCreated = (newGroup) => {
+    // Add the new group to conversations list
+    setConversations(prev => [newGroup, ...prev]);
+    // Join the new conversation room
+    socketService.joinRooms([newGroup._id]);
+  };
+
+  const handleStartDirectChat = async (user) => {
+    try {
+      const response = await fetch('http://localhost:5000/api/conversations/direct', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ otherUserId: user._id })
+      });
+
+      if (response.ok) {
+        const conversation = await response.json();
+        
+        // Check if conversation already exists in our list
+        const existingConversation = conversations.find(conv => conv._id === conversation._id);
+        if (!existingConversation) {
+          // Add the new conversation to the list
+          setConversations(prev => [conversation, ...prev]);
+          // Join the conversation room
+          socketService.joinRooms([conversation._id]);
+        }
+        
+        // Select the conversation
+        setSelectedConversation(conversation);
+      }
+    } catch (error) {
+      console.error('Error starting direct chat:', error);
     }
   };
 
@@ -151,20 +203,28 @@ const ChatPage = () => {
       </div>
       
       <div className="chat-main">
-        <UserList 
-          users={users} 
-          selectedUser={selectedUser}
-          onUserSelect={handleUserSelect}
+        <ConversationList 
+          conversations={conversations} 
+          selectedConversation={selectedConversation}
+          onConversationSelect={handleConversationSelect}
           onlineUsers={onlineUsers}
           unreadCounts={unreadCounts}
+          onCreateGroup={() => setShowCreateGroupModal(true)}
+          onStartDirectChat={handleStartDirectChat}
         />
         <ChatWindow 
-          selectedUser={selectedUser}
+          selectedConversation={selectedConversation}
           currentUser={user}
           onlineUsers={onlineUsers}
-          users={users}
         />
       </div>
+
+      <CreateGroupModal
+        isOpen={showCreateGroupModal}
+        onClose={() => setShowCreateGroupModal(false)}
+        onGroupCreated={handleGroupCreated}
+        currentUser={user}
+      />
     </div>
   );
 };

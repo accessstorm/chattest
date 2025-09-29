@@ -6,7 +6,7 @@ import { messagesAPI } from '../services/api';
 import socketService from '../services/socket';
 import './ChatWindow.css';
 
-const ChatWindow = ({ selectedUser, currentUser, onlineUsers, users = [] }) => {
+const ChatWindow = ({ selectedConversation, currentUser, onlineUsers }) => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
@@ -25,14 +25,11 @@ const ChatWindow = ({ selectedUser, currentUser, onlineUsers, users = [] }) => {
   // 1. Wrap event handlers in useCallback to give them a stable identity.
   //    This prevents them from being recreated on every render.
   const handleNewMessage = useCallback((message) => {
-    if (!selectedUser) return;
-    if (
-      (message.senderId._id === currentUser.id && message.receiverId._id === selectedUser._id) ||
-      (message.senderId._id === selectedUser._id && message.receiverId._id === currentUser.id)
-    ) {
+    if (!selectedConversation) return;
+    if (message.conversationId === selectedConversation._id) {
       setMessages(prev => [...prev, message]);
     }
-  }, [currentUser.id, selectedUser]); // Dependencies for this handler
+  }, [selectedConversation]); // Dependencies for this handler
 
   const handleMessageUpdated = useCallback((updatedMessage) => {
     console.log('Message updated received:', updatedMessage);
@@ -71,14 +68,22 @@ const ChatWindow = ({ selectedUser, currentUser, onlineUsers, users = [] }) => {
     };
   }, [handleNewMessage, handleMessageUpdated, handleMessageDeleted, handleError]);
 
-  // Load messages when selectedUser changes
+  // Load messages when selectedConversation changes
   useEffect(() => {
-    if (selectedUser) {
+    if (selectedConversation) {
       const loadMessages = async () => {
         setLoading(true);
         try {
-          const response = await messagesAPI.getConversation(selectedUser._id);
-          setMessages(response.data);
+          const response = await fetch(`http://localhost:5000/api/conversations/${selectedConversation._id}/messages`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          
+          if (response.ok) {
+            const messagesData = await response.json();
+            setMessages(messagesData);
+          }
         } catch (error) {
           console.error('Error loading messages:', error);
         } finally {
@@ -87,18 +92,18 @@ const ChatWindow = ({ selectedUser, currentUser, onlineUsers, users = [] }) => {
       };
       
       loadMessages();
-      socketService.markAsRead(selectedUser._id);
+      socketService.markAsRead(selectedConversation._id);
     } else {
       setMessages([]);
     }
-  }, [selectedUser]);
+  }, [selectedConversation]);
 
 
   const handleSendMessage = (content, replyToMessage) => {
-    if (selectedUser && content.trim()) {
+    if (selectedConversation && content.trim()) {
       // For now, we'll just send the message normally
       // In a full implementation, you'd include reply information
-      socketService.sendMessage(selectedUser._id, content.trim());
+      socketService.sendMessage(selectedConversation._id, content.trim());
     }
   };
 
@@ -116,9 +121,26 @@ const ChatWindow = ({ selectedUser, currentUser, onlineUsers, users = [] }) => {
   };
 
   const handleForwardToUsers = (message, userIds) => {
-    // Send the message to all selected users
-    userIds.forEach(userId => {
-      socketService.sendMessage(userId, message.content);
+    // For now, we'll create direct conversations with each user and send the message
+    // In a full implementation, you'd handle this differently
+    userIds.forEach(async (userId) => {
+      try {
+        const response = await fetch('http://localhost:5000/api/conversations/direct', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ otherUserId: userId })
+        });
+        
+        if (response.ok) {
+          const conversation = await response.json();
+          socketService.sendMessage(conversation._id, message.content);
+        }
+      } catch (error) {
+        console.error('Error forwarding message:', error);
+      }
     });
     setShowForwardModal(false);
     setMessageToForward(null);
@@ -137,13 +159,13 @@ const ChatWindow = ({ selectedUser, currentUser, onlineUsers, users = [] }) => {
     });
   };
 
-  if (!selectedUser) {
+  if (!selectedConversation) {
     return (
       <div className="chat-window">
         <div className="no-conversation">
           <div className="no-conversation-content">
-            <h3>Select a user to start chatting</h3>
-            <p>Choose someone from the user list to begin your conversation</p>
+            <h3>Select a conversation to start chatting</h3>
+            <p>Choose a conversation from the list or create a new group to begin</p>
           </div>
         </div>
       </div>
@@ -155,12 +177,28 @@ const ChatWindow = ({ selectedUser, currentUser, onlineUsers, users = [] }) => {
       <div className="chat-header">
         <div className="chat-user-info">
           <div className="chat-user-avatar">
-            {selectedUser.username.charAt(0).toUpperCase()}
+            {selectedConversation.isGroupChat 
+              ? selectedConversation.groupName.charAt(0).toUpperCase()
+              : selectedConversation.otherParticipant?.username?.charAt(0).toUpperCase() || '?'
+            }
           </div>
           <div>
-            <h3>{selectedUser.username.toUpperCase()}</h3>
-            <span className={`chat-status ${onlineUsers.has(selectedUser._id) ? 'online' : 'offline'}`}>
-              {onlineUsers.has(selectedUser._id) ? 'Online' : 'Offline'}
+            <h3>
+              {selectedConversation.isGroupChat 
+                ? selectedConversation.groupName.toUpperCase()
+                : selectedConversation.otherParticipant?.username?.toUpperCase() || 'Unknown User'
+              }
+              {selectedConversation.isGroupChat && <span className="group-indicator">👥</span>}
+            </h3>
+            <span className={`chat-status ${
+              selectedConversation.isGroupChat 
+                ? (selectedConversation.participants.some(p => onlineUsers.has(p._id)) ? 'online' : 'offline')
+                : (onlineUsers.has(selectedConversation.otherParticipant?._id) ? 'online' : 'offline')
+            }`}>
+              {selectedConversation.isGroupChat 
+                ? (selectedConversation.participants.some(p => onlineUsers.has(p._id)) ? 'Some members online' : 'All members offline')
+                : (onlineUsers.has(selectedConversation.otherParticipant?._id) ? 'Online' : 'Offline')
+              }
             </span>
           </div>
         </div>
@@ -202,7 +240,7 @@ const ChatWindow = ({ selectedUser, currentUser, onlineUsers, users = [] }) => {
         isOpen={showForwardModal}
         onClose={handleCloseForwardModal}
         message={messageToForward}
-        users={users}
+        users={[]} // We'll need to load users separately for forwarding
         onForward={handleForwardToUsers}
         currentUser={currentUser}
       />

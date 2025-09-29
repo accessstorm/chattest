@@ -1,5 +1,6 @@
 const Message = require('../models/Message');
 const User = require('../models/User');
+const Conversation = require('../models/Conversation');
 
 // Store user ID to socket ID mapping
 const userSocketMap = new Map();
@@ -19,15 +20,38 @@ const getUserSocket = (userId) => {
 const handleSocketEvents = (socket, io) => {
   // Note: userOnline/userOffline events are handled in server/index.js
 
+  // Join conversation rooms
+  socket.on('joinRooms', async (conversationIds) => {
+    try {
+      const userId = socket.userId;
+      
+      // Verify user is participant in all conversations
+      const conversations = await Conversation.find({
+        _id: { $in: conversationIds },
+        participants: userId
+      });
+
+      // Join socket rooms for valid conversations
+      conversations.forEach(conversation => {
+        socket.join(conversation._id.toString());
+      });
+
+      console.log(`User ${userId} joined ${conversations.length} conversation rooms`);
+    } catch (error) {
+      console.error('Join rooms error:', error);
+      socket.emit('error', { message: 'Failed to join conversation rooms' });
+    }
+  });
+
   // Send message
   socket.on('sendMessage', async (data) => {
     try {
-      const { receiverId, content } = data;
+      const { conversationId, content } = data;
       const senderId = socket.userId;
 
       // Validation
-      if (!receiverId || !content) {
-        socket.emit('error', { message: 'Receiver ID and content are required' });
+      if (!conversationId || !content) {
+        socket.emit('error', { message: 'Conversation ID and content are required' });
         return;
       }
 
@@ -36,38 +60,37 @@ const handleSocketEvents = (socket, io) => {
         return;
       }
 
-      // Check if receiver exists
-      const receiver = await User.findById(receiverId);
-      if (!receiver) {
-        socket.emit('error', { message: 'Receiver not found' });
+      // Check if conversation exists and user is a participant
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+        participants: senderId
+      });
+
+      if (!conversation) {
+        socket.emit('error', { message: 'Conversation not found or access denied' });
         return;
       }
 
       // Create message
       const message = new Message({
         senderId,
-        receiverId,
+        conversationId,
         content: content.trim()
       });
 
       await message.save();
 
+      // Update conversation's lastMessage
+      conversation.lastMessage = message._id;
+      await conversation.save();
+
       // Populate the message with user data
       await message.populate([
-        { path: 'senderId', select: 'username' },
-        { path: 'receiverId', select: 'username' }
+        { path: 'senderId', select: 'username' }
       ]);
 
-      // Emit to sender and receiver
-      const senderSocket = getUserSocket(senderId);
-      const receiverSocket = getUserSocket(receiverId);
-
-      if (senderSocket) {
-        io.to(senderSocket).emit('newMessage', message);
-      }
-      if (receiverSocket) {
-        io.to(receiverSocket).emit('newMessage', message);
-      }
+      // Broadcast to all participants in the conversation room
+      io.to(conversationId).emit('newMessage', message);
     } catch (error) {
       console.error('Send message error:', error);
       socket.emit('error', { message: 'Failed to send message' });
@@ -93,7 +116,7 @@ const handleSocketEvents = (socket, io) => {
       }
 
       // Find the message
-      const message = await Message.findById(messageId);
+      const message = await Message.findById(messageId).populate('conversationId');
       if (!message) {
         socket.emit('error', { message: 'Message not found' });
         return;
@@ -119,22 +142,11 @@ const handleSocketEvents = (socket, io) => {
 
       // Populate the message with user data
       await message.populate([
-        { path: 'senderId', select: 'username' },
-        { path: 'receiverId', select: 'username' }
+        { path: 'senderId', select: 'username' }
       ]);
 
-      // Emit to both users
-      const senderSocket = getUserSocket(message.senderId);
-      const receiverSocket = getUserSocket(message.receiverId);
-
-      console.log('Emitting messageUpdated to sender:', senderSocket, 'receiver:', receiverSocket);
-
-      if (senderSocket) {
-        io.to(senderSocket).emit('messageUpdated', message);
-      }
-      if (receiverSocket) {
-        io.to(receiverSocket).emit('messageUpdated', message);
-      }
+      // Broadcast to all participants in the conversation room
+      io.to(message.conversationId._id.toString()).emit('messageUpdated', message);
     } catch (error) {
       console.error('Edit message error:', error);
       socket.emit('error', { message: 'Failed to edit message' });
@@ -155,7 +167,7 @@ const handleSocketEvents = (socket, io) => {
       }
 
       // Find the message
-      const message = await Message.findById(messageId);
+      const message = await Message.findById(messageId).populate('conversationId');
       if (!message) {
         socket.emit('error', { message: 'Message not found' });
         return;
@@ -180,22 +192,11 @@ const handleSocketEvents = (socket, io) => {
 
       // Populate the message with user data
       await message.populate([
-        { path: 'senderId', select: 'username' },
-        { path: 'receiverId', select: 'username' }
+        { path: 'senderId', select: 'username' }
       ]);
 
-      // Emit to both users
-      const senderSocket = getUserSocket(message.senderId);
-      const receiverSocket = getUserSocket(message.receiverId);
-
-      console.log('Emitting messageDeleted to sender:', senderSocket, 'receiver:', receiverSocket);
-
-      if (senderSocket) {
-        io.to(senderSocket).emit('messageDeleted', message);
-      }
-      if (receiverSocket) {
-        io.to(receiverSocket).emit('messageDeleted', message);
-      }
+      // Broadcast to all participants in the conversation room
+      io.to(message.conversationId._id.toString()).emit('messageDeleted', message);
     } catch (error) {
       console.error('Delete message error:', error);
       socket.emit('error', { message: 'Failed to delete message' });
@@ -205,14 +206,25 @@ const handleSocketEvents = (socket, io) => {
   // Mark messages as read
   socket.on('markAsRead', async (data) => {
     try {
-      const { otherUserId } = data;
+      const { conversationId } = data;
       const currentUserId = socket.userId;
 
-      // Mark all unread messages from otherUserId to currentUserId as read
+      // Verify user is participant in conversation
+      const conversation = await Conversation.findOne({
+        _id: conversationId,
+        participants: currentUserId
+      });
+
+      if (!conversation) {
+        socket.emit('error', { message: 'Conversation not found or access denied' });
+        return;
+      }
+
+      // Mark all unread messages in this conversation as read
       await Message.updateMany(
         {
-          senderId: otherUserId,
-          receiverId: currentUserId,
+          conversationId: conversationId,
+          senderId: { $ne: currentUserId }, // Don't mark own messages as read
           isRead: false
         },
         {
@@ -221,14 +233,12 @@ const handleSocketEvents = (socket, io) => {
         }
       );
 
-      // Notify the sender that their messages were read
-      const senderSocket = getUserSocket(otherUserId);
-      if (senderSocket) {
-        io.to(senderSocket).emit('messagesRead', { 
-          readerId: currentUserId,
-          readAt: new Date()
-        });
-      }
+      // Notify all participants that messages were read
+      io.to(conversationId).emit('messagesRead', { 
+        readerId: currentUserId,
+        conversationId: conversationId,
+        readAt: new Date()
+      });
     } catch (error) {
       console.error('Mark as read error:', error);
       socket.emit('error', { message: 'Failed to mark messages as read' });
@@ -240,7 +250,8 @@ const handleSocketEvents = (socket, io) => {
     try {
       const currentUserId = socket.userId;
       const unreadCount = await Message.countDocuments({
-        receiverId: currentUserId,
+        conversationId: { $in: await Conversation.find({ participants: currentUserId }).distinct('_id') },
+        senderId: { $ne: currentUserId },
         isRead: false
       });
 

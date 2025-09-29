@@ -20,15 +20,15 @@
 }
 
 .message.own .message-content {
-  background: #ffda03;
-  color: #333;
+  background: #005c4b;
+  color: #e9edef;
   border-bottom-right-radius: 4px;
 }
 
 .message.other .message-content {
-  background: white;
-  color: #333;
-  border: 1px solid #e1e5e9;
+  background: #202c33;
+  color: #e9edef;
+  border: 1px solid #2a3942;
   border-bottom-left-radius: 4px;
 }
 
@@ -41,7 +41,7 @@
 .deleted-message {
   font-style: italic;
   opacity: 0.7;
-  color: #6c757d;
+  color: #8696a0;
 }
 
 .message-meta {
@@ -129,10 +129,10 @@
   position: absolute;
   top: 100%;
   right: 0;
-  background: white;
-  border: 1px solid #e1e5e9;
+  background: #202c33;
+  border: 1px solid #2a3942;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   z-index: 1000;
   min-width: 120px;
   padding: 4px 0;
@@ -154,7 +154,7 @@
   width: 100%;
   background: none;
   border: none;
-  color: #333;
+  color: #e9edef;
   cursor: pointer;
   font-size: 0.85rem;
   font-weight: 500;
@@ -164,7 +164,7 @@
 }
 
 .popup-btn:hover {
-  background: #f8f9fa;
+  background: #2a3942;
 }
 
 .popup-btn.reply-btn:hover {
@@ -195,18 +195,18 @@
 }
 
 .edit-input {
-  border: 1px solid #ddd;
+  border: 1px solid #2a3942;
   border-radius: 8px;
   padding: 8px 12px;
   font-size: 0.9rem;
-  background: white;
-  color: #333;
+  background: #202c33;
+  color: #e9edef;
 }
 
 .edit-input:focus {
   outline: none;
-  border-color: #ffda03;
-  box-shadow: 0 0 0 2px rgba(255, 218, 3, 0.2);
+  border-color: #ffd700;
+  box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.2);
 }
 
 .edit-actions {
@@ -226,21 +226,21 @@
 }
 
 .save-btn {
-  background: #28a745;
-  color: white;
+  background: #ffd700;
+  color: #0b141a;
 }
 
 .save-btn:hover {
-  background: #218838;
+  background: #ffed4e;
 }
 
 .cancel-btn {
-  background: #6c757d;
-  color: white;
+  background: #8696a0;
+  color: #e9edef;
 }
 
 .cancel-btn:hover {
-  background: #5a6268;
+  background: #6c757d;
 }
 
 @keyframes fadeIn {
